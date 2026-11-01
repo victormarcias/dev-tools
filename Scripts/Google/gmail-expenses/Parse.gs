@@ -1,0 +1,95 @@
+// Gmail Expenses: email parsing and USD conversion.
+// author: @victormarcias
+
+const DOLAR_TARJETA_URL = 'https://dolarapi.com/v1/dolares/tarjeta';
+
+// Returns { review: reason } when the mail can't be read, { row: null } when
+// it should be marked as processed without a row, or { row } otherwise.
+function parseMessage(source, message) {
+  const body = message.getPlainBody();
+
+  if (source.skipIf && source.skipIf.test(body)) return { row: null };
+  if (source.onlyIf && !source.onlyIf.test(body)) return { review: 'onlyIf did not match' };
+
+  let ars = source.amount ? parseAmount(firstMatch(source.amount, body)) : null;
+  const usd = source.usd ? parseAmount(firstMatch(source.usd, body)) : null;
+  if (!ars && !usd) return { review: 'no amount found' };
+
+  // USD goes as is in its own column, and converted into the category
+  let note = '';
+  if (usd) {
+    const fx = usdRate();
+    ars = (ars || 0) + usd * fx.rate;
+    note = `USD ${usd} × ${fx.rate} (dólar tarjeta ${fx.date})`;
+    if (fx.stale) note += '\nDolarApi no respondió: cotización anterior.';
+  }
+
+  const due = source.due ? parseDate(firstMatch(source.due, body)) : null;
+
+  return {
+    row: {
+      date: message.getDate(),
+      detail: `${source.name} – ${message.getSubject()}`,
+      category: source.category,
+      ars: round2(ars),
+      usd: usd || null,
+      due,
+      status: source.status,
+      note,
+    },
+  };
+}
+
+function firstMatch(regex, text) {
+  const match = text.match(regex);
+  return match ? match[1] : null;
+}
+
+// Accepts 12.345,67 / 12,345.67 / 12.345 / 1234,5: a separator followed by 1
+// or 2 trailing digits starts the decimals, and every other separator to its
+// left is a thousands one, whichever the format.
+function parseAmount(text) {
+  if (!text) return null;
+  const [, integer, decimals] = text.replace(/[.,]+$/, '').match(/^(.*?)(?:[.,](\d{1,2}))?$/);
+  const amount = Number(`${integer.replace(/\D/g, '') || 0}.${decimals || 0}`);
+  return amount || null;
+}
+
+// dd/mm/yy or dd/mm/yyyy
+function parseDate(text) {
+  if (!text) return null;
+  const [day, month, year] = text.split('/').map(Number);
+  return new Date(year < 100 ? 2000 + year : year, month - 1, day);
+}
+
+function round2(value) {
+  return Math.round(value * 100) / 100;
+}
+
+let cachedRate = null;
+
+// Dólar tarjeta (selling price) from DolarApi. When it fails, falls back to
+// the last rate that worked.
+function usdRate() {
+  if (cachedRate) return cachedRate;
+  const props = PropertiesService.getScriptProperties();
+
+  try {
+    const response = UrlFetchApp.fetch(DOLAR_TARJETA_URL, { muteHttpExceptions: true });
+    if (response.getResponseCode() === 200) {
+      const data = JSON.parse(response.getContentText());
+      if (data.venta > 0) {
+        cachedRate = { rate: data.venta, date: data.fechaActualizacion.slice(0, 10), stale: false };
+        props.setProperty('LAST_FX', JSON.stringify(cachedRate));
+        return cachedRate;
+      }
+    }
+  } catch (error) {
+    console.error(`DolarApi: ${error}`);
+  }
+
+  const last = props.getProperty('LAST_FX');
+  if (!last) throw new Error('No USD rate available.');
+  cachedRate = { ...JSON.parse(last), stale: true };
+  return cachedRate;
+}

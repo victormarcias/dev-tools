@@ -1,0 +1,8 @@
+Fecha,Detalle,Tarjetas,Transporte (Auto),Compras,Servicios,Salud,Delivery,USD,Vencimiento,Estado
+02/11/2026,Uber – Tu viaje del domingo,,4250,,,,,,,Pagado
+03/11/2026,PedidosYa – Tu pedido fue entregado,,,,,,12800,,,Pagado
+05/11/2026,Ecogas – Tu factura está disponible,,,,38900,,,,20/11/2026,Pagar
+08/11/2026,MercadoLibre – Compraste Auriculares,,,25000,,,,,,Pagado
+10/11/2026,Galicia – Tu resumen de Visa está disponible,441300,,,,,,20,24/11/2026,Pagar
+12/11/2026,OSDE – Tu factura está disponible,,,,,185000,,,22/11/2026,Pagar
+TOTAL,=SUM(C8:H8),=SUM(C2:C7),=SUM(D2:D7),=SUM(E2:E7),=SUM(F2:F7),=SUM(G2:G7),=SUM(H2:H7),=SUM(I2:I7),,
