@@ -10,9 +10,9 @@
 //
 //   { name: 'Ecogas', from: 'ecogas.com.ar', amount: /Total\s*\$\s*([\d.,]+)/i }
 
-// Hour of the day (0-23, script time zone) of the daily run. Apps Script only
-// guarantees the hour, not the minute. Re-run install() after changing it.
-const RUN_HOUR = 7;
+// Hours between runs. Apps Script only accepts 1, 2, 4, 6, 8 or 12, and
+// doesn't guarantee the exact minute. Re-run install() after changing it.
+const RUN_EVERY_HOURS = 2;
 
 // How many days back dryRun() looks, labeled emails included.
 const DRY_RUN_DAYS = 1;

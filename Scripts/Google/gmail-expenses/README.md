@@ -1,8 +1,8 @@
 ## Gmail Expenses
 
-📧 Google Apps Script that reads expense emails from Gmail once a day and writes
-them into a Google Sheet, one row per transaction. Made for Argentina: amounts
-like `$ 12.345,67`, dólar tarjeta, local senders.
+📧 Google Apps Script that reads expense emails from Gmail every few hours and
+writes them into a Google Sheet, one row per transaction. Made for Argentina:
+amounts like `$ 12.345,67`, dólar tarjeta, local senders.
 
 It only reads the email body, never PDF attachments.
 
@@ -67,10 +67,10 @@ paid with debit or account money.
 4. In the Apps Script editor: *Project Settings → Script Properties* → add
    `FILE_ID` with the sheet's ID.
 5. Run `install()` from the editor and accept the permissions. That creates the
-   daily trigger at `RUN_HOUR`.
+   trigger that runs every `RUN_EVERY_HOURS`.
 
 To process right away, run `run()`: it can be run by hand at any time, on top
-of the daily trigger.
+of the trigger.
 
 #### Option A: clasp (from the terminal)
 
@@ -114,7 +114,9 @@ or with `clasp pull` if you set up clasp later.
 
 Everything lives in [Config.gs](Config.gs); only IDs go in Script Properties.
 
-- `RUN_HOUR`: hour of the daily run. Run `install()` again after changing it.
+- `RUN_EVERY_HOURS`: hours between runs (1, 2, 4, 6, 8 or 12; default 2).
+  Run `install()` again after changing it. There's no "on new email" trigger
+  in Apps Script, so this is as close as it gets.
 - `ARCHIVE_PROCESSED`: also archive processed emails (default `false`, labels
   only).
 - `DRY_RUN_DAYS`: how many days back `dryRun()` looks in the inbox (default

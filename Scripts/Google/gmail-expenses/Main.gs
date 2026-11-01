@@ -1,10 +1,10 @@
-// Gmail Expenses: reads expense emails once a day and writes one row per
+// Gmail Expenses: reads expense emails every few hours and writes one row per
 // transaction into a Google Sheet, one tab per month.
 // author: @victormarcias
 //
 // Usage (from the Apps Script editor):
-//   install()  sets up the daily trigger. Run it once, and again after
-//              changing RUN_HOUR.
+//   install()  sets up the trigger that calls run() every RUN_EVERY_HOURS.
+//              Run it once, and again after changing RUN_EVERY_HOURS.
 //   run()      processes every inbox email from a known sender that isn't
 //              labeled yet, however old. The trigger calls this; it can also
 //              be run by hand at any time.
@@ -21,7 +21,7 @@ function install() {
   ScriptApp.getProjectTriggers()
     .filter((trigger) => trigger.getHandlerFunction() === 'run')
     .forEach((trigger) => ScriptApp.deleteTrigger(trigger));
-  ScriptApp.newTrigger('run').timeBased().everyDays(1).atHour(RUN_HOUR).create();
+  ScriptApp.newTrigger('run').timeBased().everyHours(RUN_EVERY_HOURS).create();
 
   getLabelIds();
 }
