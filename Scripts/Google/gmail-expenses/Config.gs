@@ -17,6 +17,10 @@ const RUN_EVERY_HOURS = 2;
 // How many days back dryRun() looks, labeled emails included.
 const DRY_RUN_DAYS = 1;
 
+// Longest Detalle ("Sender – Subject") written to the sheet; longer ones are
+// cut with "…".
+const DETAIL_MAX_LENGTH = 80;
+
 const LABEL_PROCESSED = 'Gastos/Procesado';
 const LABEL_REVIEW = 'Gastos/Revisar';
 

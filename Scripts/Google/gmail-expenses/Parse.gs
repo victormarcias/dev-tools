@@ -29,7 +29,7 @@ function parseMessage(source, message) {
   return {
     row: {
       date: message.getDate(),
-      detail: `${source.name} – ${message.getSubject()}`,
+      detail: truncate(`${source.name} – ${message.getSubject()}`, DETAIL_MAX_LENGTH),
       category: source.category,
       ars: round2(ars),
       usd: usd || null,
@@ -70,6 +70,12 @@ function parseDate(text) {
     : text.split('/').map(Number);
   if (!month) return null;
   return new Date(year < 100 ? 2000 + year : year, month - 1, day);
+}
+
+// Collapses whitespace and cuts at `max` characters, "…" included
+function truncate(text, max) {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean;
 }
 
 function round2(value) {

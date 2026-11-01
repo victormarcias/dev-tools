@@ -119,6 +119,8 @@ Everything lives in [Config.gs](Config.gs); only IDs go in Script Properties.
   in Apps Script, so this is as close as it gets.
 - `ARCHIVE_PROCESSED`: also archive processed emails (default `false`, labels
   only).
+- `DETAIL_MAX_LENGTH`: longest `Detalle` ("Sender – Subject"); longer ones
+  are cut with "…" (default 80).
 - `DRY_RUN_DAYS`: how many days back `dryRun()` looks in the inbox (default
   1). Raise it to test patterns against older emails.
 - `BANKS`, `SERVICES`, `PREPAGAS`: senders, as they appear in the From name or
