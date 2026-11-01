@@ -5,7 +5,9 @@
 // Usage (from the Apps Script editor):
 //   install()  sets up the daily trigger. Run it once, and again after
 //              changing RUN_HOUR.
-//   run()      processes new emails now. The trigger calls this.
+//   run()      processes every inbox email from a known sender that isn't
+//              labeled yet, however old. The trigger calls this; it can also
+//              be run by hand at any time.
 //   dryRun()   logs what the last DRY_RUN_DAYS of emails would produce,
 //              without labeling them or touching the sheet.
 
@@ -16,11 +18,6 @@ function install() {
   }
   SpreadsheetApp.openById(props.getProperty('FILE_ID'));
 
-  // Only emails received after the first install are processed.
-  if (!props.getProperty('INSTALLED_AT')) {
-    props.setProperty('INSTALLED_AT', String(Math.floor(Date.now() / 1000)));
-  }
-
   ScriptApp.getProjectTriggers()
     .filter((trigger) => trigger.getHandlerFunction() === 'run')
     .forEach((trigger) => ScriptApp.deleteTrigger(trigger));
@@ -29,43 +26,49 @@ function install() {
   getLabelIds();
 }
 
+// Apps Script stops any execution at 6 minutes. Scanning stops after this
+// long, so there's time left to write the rows and label the emails; whatever
+// wasn't reached is picked up by the next run.
+const TIME_BUDGET_MS = 4 * 60 * 1000;
+
 function run() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return;
 
   try {
     const props = PropertiesService.getScriptProperties();
-    const installedAt = Number(props.getProperty('INSTALLED_AT'));
-    if (!installedAt) throw new Error('Run install() first.');
-
-    // Triggers only guarantee the hour, so two daily runs can be more than
-    // LOOKBACK_DAYS apart: always reach back to the previous run's start too.
-    const startedAt = Math.floor(Date.now() / 1000);
-    const lastRun = Number(props.getProperty('LAST_RUN')) || startedAt;
-    const since = Math.max(installedAt, Math.min(lastRun, startedAt - LOOKBACK_DAYS * 86400));
-
+    if (!props.getProperty('FILE_ID')) {
+      throw new Error('Missing FILE_ID in Script Properties.');
+    }
     const spreadsheet = SpreadsheetApp.openById(props.getProperty('FILE_ID'));
     const labels = getLabelIds();
-    const rowsByMonth = {};
+    const deadline = Date.now() + TIME_BUDGET_MS;
+    const rows = [];
+    const processed = [];
 
-    scanMessages(since, false, (source, id, message, result) => {
+    const finished = scanMessages(null, false, (source, id, message, result) => {
       if (result.review) {
         console.error(`${source.name} "${message.getSubject()}": ${result.review}`);
         markMessage(id, labels.review, false);
         return;
       }
-      if (result.row) {
-        const month = Utilities.formatDate(result.row.date, Session.getScriptTimeZone(), 'yyyy-MM');
-        (rowsByMonth[month] = rowsByMonth[month] || []).push(result.row);
-      }
-      markMessage(id, labels.processed, ARCHIVE_PROCESSED);
-    });
+      if (result.row) rows.push(result.row);
+      processed.push(id);
+    }, deadline).finished;
 
-    // Sorted so new tabs are created in chronological order
-    Object.keys(rowsByMonth).sort().forEach((month) => {
-      writeRows(spreadsheet, month, rowsByMonth[month]);
-    });
-    props.setProperty('LAST_RUN', String(startedAt));
+    // Everything goes to the tab of the month the run happens in, not the
+    // email's: a bill sent on the 31st is paid next month, so it belongs there.
+    // Rows first, labels after: if writing fails, the emails stay unlabeled
+    // and the next run retries them instead of losing them.
+    if (rows.length) {
+      const month = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+      writeRows(spreadsheet, month, rows);
+    }
+    processed.forEach((id) => markMessage(id, labels.processed, ARCHIVE_PROCESSED));
+
+    if (!finished) {
+      console.warn(`Time budget reached after ${processed.length} emails: run() again to continue.`);
+    }
   } finally {
     lock.releaseLock();
   }
@@ -78,7 +81,7 @@ function dryRun(days = DRY_RUN_DAYS) {
   const formatDate = (date) => Utilities.formatDate(date, Session.getScriptTimeZone(), 'dd/MM/yyyy');
   let count = 0;
 
-  const unmatched = scanMessages(since, true, (source, id, message, result) => {
+  const { unmatched } = scanMessages(since, true, (source, id, message, result) => {
     count++;
     const email = `[${source.category}] ${formatDate(message.getDate())} ${source.name} – ${message.getSubject()}`;
     if (result.review) {
@@ -99,17 +102,25 @@ function dryRun(days = DRY_RUN_DAYS) {
   console.log(`${count} handled, ${unmatched.length} ignored in the last ${days} days.`);
 }
 
-// Calls handle(source, id, message, result) once per email from a known
-// sender whose subject matches. Returns the emails from known senders that no
-// subject matched, for dryRun().
-function scanMessages(since, includeLabeled, handle) {
+// Calls handle(source, id, message, result) once per inbox email from a known
+// sender whose subject matches (`since`: unix seconds, or null for no limit).
+// Stops early once `deadline` (ms timestamp) passes. Returns whether it got
+// through every email, and the emails from known senders that no subject
+// matched, for dryRun().
+function scanMessages(since, includeLabeled, handle, deadline = Infinity) {
   const seen = {};
   const unmatched = {};
+  let finished = true;
 
   sources().forEach((source) => {
+    if (!finished) return;
     findMessageIds(source, since, includeLabeled).forEach((id) => {
       // The same sender can feed two categories (Uber / Uber Eats)
-      if (seen[id]) return;
+      if (!finished || seen[id]) return;
+      if (Date.now() > deadline) {
+        finished = false;
+        return;
+      }
 
       const message = GmailApp.getMessageById(id);
       const subject = message.getSubject();
@@ -130,7 +141,7 @@ function scanMessages(since, includeLabeled, handle) {
     });
   });
 
-  return Object.values(unmatched);
+  return { finished, unmatched: Object.values(unmatched) };
 }
 
 // Flattens CATEGORIES into one source per sender, with the category defaults

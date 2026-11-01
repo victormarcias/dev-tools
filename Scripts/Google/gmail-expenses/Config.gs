@@ -14,10 +14,6 @@
 // guarantees the hour, not the minute. Re-run install() after changing it.
 const RUN_HOUR = 7;
 
-// How many days back each run looks for emails. 1 matches the daily run; raise
-// it to catch up after missed runs or to re-read emails taken out of review.
-const LOOKBACK_DAYS = 1;
-
 // How many days back dryRun() looks, labeled emails included.
 const DRY_RUN_DAYS = 1;
 
@@ -29,7 +25,18 @@ const LABEL_REVIEW = 'Gastos/Revisar';
 const ARCHIVE_PROCESSED = false;
 
 // Credit card statements (resumen de tarjeta).
-const BANKS = ['Brubank', 'Galicia', 'Santander', 'BBVA'];
+const BANKS = [
+  'Brubank',
+  // "Saldo en pesos: 68.314,43" (no $), "Vencimiento: 11 Nov 26"
+  {
+    name: 'Galicia',
+    amount: /Saldo en pesos:\s*\$?\s*([\d.,]+)/i,
+    usd: /Saldo en d[oó]lares:\s*(?:U\$S|US\$|USD)?\s*([\d.,]+)/i,
+    due: /Vencimiento:\s*(\d{1,2}\s+[a-z]{3}\w*\.?\s+\d{2,4})/i,
+  },
+  'Santander',
+  'BBVA',
+];
 
 // Bills ("tu factura está disponible"): electricity, gas, water, phone, etc.
 const SERVICES = ['AYSAM', 'Cooperativa Electrica', 'Ecogas'];

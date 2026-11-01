@@ -55,10 +55,20 @@ function parseAmount(text) {
   return amount || null;
 }
 
-// dd/mm/yy or dd/mm/yyyy
+// Spanish and English month abbreviations, for dates like "11 Nov 26"
+const MONTHS = {
+  ene: 1, jan: 1, feb: 2, mar: 3, abr: 4, apr: 4, may: 5, jun: 6, jul: 7,
+  ago: 8, aug: 8, sep: 9, set: 9, oct: 10, nov: 11, dic: 12, dec: 12,
+};
+
+// dd/mm/yy, dd/mm/yyyy, or "11 Nov 26" / "11 noviembre 2026"
 function parseDate(text) {
   if (!text) return null;
-  const [day, month, year] = text.split('/').map(Number);
+  const named = text.match(/^(\d{1,2})\s+([a-z]{3})[a-z]*\.?\s+(\d{2,4})$/i);
+  const [day, month, year] = named
+    ? [Number(named[1]), MONTHS[named[2].toLowerCase()], Number(named[3])]
+    : text.split('/').map(Number);
+  if (!month) return null;
   return new Date(year < 100 ? 2000 + year : year, month - 1, day);
 }
 

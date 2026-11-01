@@ -6,7 +6,8 @@
 // end up in the same thread.
 
 function findMessageIds(source, since, includeLabeled) {
-  const terms = [`from:"${source.from}"`, `after:${since}`];
+  const terms = ['in:inbox', `from:"${source.from}"`];
+  if (since) terms.push(`after:${since}`);
   if (!includeLabeled) {
     terms.push(`-label:${searchName(LABEL_PROCESSED)}`, `-label:${searchName(LABEL_REVIEW)}`);
   }

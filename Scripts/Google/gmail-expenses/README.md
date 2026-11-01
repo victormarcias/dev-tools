@@ -22,8 +22,10 @@ It only reads the email body, never PDF attachments.
 One tab per month (`2026-11`), every tab following
 [gastos.example.csv](gastos.example.csv) (with the default categories):
 
-- One row per transaction, sorted by email date, with the amount in its
-  category column.
+- Each run writes to the tab of the month **it runs in**, not the email's: a
+  bill sent on the 31st lands in next month's tab, when it's paid.
+- One row per transaction, sorted by email date (`Fecha`), with the amount in
+  its category column.
 - `USD`: the original amount of USD charges. The same charge is also added to
   its category in pesos, at the dólar tarjeta from [DolarApi](https://dolarapi.com).
   The rate used is in the cell's note; if DolarApi is down, the last rate that
@@ -40,8 +42,13 @@ One tab per month (`2026-11`), every tab following
   `ARCHIVE_PROCESSED` is on.
 - From a known sender but the amount couldn't be read: labeled `Gastos/Revisar`
   and left in the inbox, no row added. After fixing the patterns, remove the
-  label and it'll be picked up again if it's within `LOOKBACK_DAYS`.
-- Only emails received after the first `install()` are processed.
+  label and the next run picks it up again.
+- Each run looks at every email in the inbox from a known sender that has
+  neither label, however old. Labeled emails are skipped, so a row is never
+  added twice. Archived emails are never looked at.
+- A run stops scanning after 4 minutes (Apps Script kills it at 6), writes
+  what it has and labels only those emails; the rest wait for the next run.
+  The first run on a full inbox may need a few manual `run()`s.
 
 ### ⚠️ Double counting
 
@@ -62,7 +69,8 @@ paid with debit or account money.
 5. Run `install()` from the editor and accept the permissions. That creates the
    daily trigger at `RUN_HOUR`.
 
-To process right away, run `run()`.
+To process right away, run `run()`: it can be run by hand at any time, on top
+of the daily trigger.
 
 #### Option A: clasp (from the terminal)
 
@@ -85,7 +93,7 @@ what runs in Google in sync.
    clasp push --force
    ```
 
-After that, every change is a `clasp push`, and `clasp open` opens the editor.
+After that, every change is a `clasp push`, and `clasp open-script` opens the editor.
 
 #### Option B: copy by hand (from the web)
 
@@ -109,11 +117,8 @@ Everything lives in [Config.gs](Config.gs); only IDs go in Script Properties.
 - `RUN_HOUR`: hour of the daily run. Run `install()` again after changing it.
 - `ARCHIVE_PROCESSED`: also archive processed emails (default `false`, labels
   only).
-- `LOOKBACK_DAYS`: how many days back each run looks (default 1). A run also
-  always reaches back to the start of the previous successful run, so missed
-  runs and trigger time jitter don't lose emails.
-- `DRY_RUN_DAYS`: how many days back `dryRun()` looks (default 1). Raise it
-  to test patterns against older emails.
+- `DRY_RUN_DAYS`: how many days back `dryRun()` looks in the inbox (default
+  1). Raise it to test patterns against older emails.
 - `BANKS`, `SERVICES`, `PREPAGAS`: senders, as they appear in the From name or
   address.
 - Patterns: each category has default regexes for `subject`, `amount`, `usd`
@@ -146,7 +151,9 @@ message if something is missing.
 
 ```js
 'Mascotas': {
-  entries: [{ name: 'Puppis', from: 'puppis.com.ar', subject: /pedido|compra/i }],
+  entries: [
+    { name: 'Puppis', from: 'puppis.com.ar', subject: /pedido|compra/i },
+  ],
   amount: AMOUNT_ARS,
   status: STATUS_PAID,
 },
@@ -160,8 +167,8 @@ too.
 #### Testing changes
 
 After editing `Config.gs` (and `clasp push`, if using clasp), run `dryRun()`
-from the editor. It looks at the last `DRY_RUN_DAYS` days of emails from every known
-sender, labeled or not, and logs what `run()` would do with each one, without
+from the editor. It looks at the last `DRY_RUN_DAYS` days of inbox emails from
+every known sender, labeled or not, and logs what `run()` would do with each one, without
 labeling anything or touching the sheet:
 
 ```
