@@ -10,19 +10,19 @@ It only reads the email body, never PDF attachments.
 
 | Column | Senders | Estado |
 |---|---|---|
-| Tarjetas | `BANKS` (credit card statements only, not account statements: one row per balance, ARS and USD) | Pagar |
-| Transporte | Uber, Cabify | Pagado |
-| Compras | MercadoLibre, only debit / account money purchases; payments and transfers to anyone not known (see below) | Pagado |
 | Hogar | Payments to `HOGAR` (electricity, gas, water, municipal taxes) and transfers to `TRANSFERS` aliases (expensas, cleaning). Their bills are ignored | Pagado |
 | Servicios | Payments to `SERVICES` phone, internet and TV (bills ignored). Digital services (streaming, music, games, apps, cloud, AI): their receipts, ARS or USD, credit card charges skipped | Pagado |
 | Salud | `PREPAGAS` (health insurance), paid by automatic debit | Pagado |
+| Tarjetas | `BANKS` (credit card statements only, not account statements: one row per balance, ARS and USD) | Pagar |
+| Transporte | Uber, Cabify | Pagado |
+| Compras | MercadoLibre, only debit / account money purchases; payments and transfers to anyone not known (see below) | Pagado |
 | Delivery | PedidosYa (orders and Plus), Rappi (orders and Prime), Uber Eats | Pagado |
 
 ### The sheet
 
 One tab per month (`2026-11`). With the default categories, the columns are
-`Fecha`, `Detalle`, `Tarjetas`, `Transporte`, `Compras`, `Hogar`, `Servicios`,
-`Salud`, `Delivery`, `USD`, `Vencimiento` and `Estado`.
+`Fecha`, `Detalle`, `Hogar`, `Servicios`, `Salud`, `Tarjetas`, `Transporte`,
+`Compras`, `Delivery`, `USD`, `Vencimiento` and `Estado`.
 
 - Each run writes to the tab of the month **it runs in**, not the email's: a
   bill sent on the 31st lands in next month's tab, when it's paid.
