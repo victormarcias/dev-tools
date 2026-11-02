@@ -74,8 +74,8 @@ function cellValue(row, header) {
   }
 }
 
-// Per-column sums for every category and USD; Detalle holds the grand total
-// in pesos (USD is already included, converted, in the categories).
+// Per-column sums for every category and USD. Detalle is a text column, so
+// it gets no sum.
 function writeTotalRow(sheet, col, width, dataRows) {
   const totalRow = dataRows + 2;
   const cell = (header) => sheet.getRange(totalRow, col(header));
@@ -84,8 +84,6 @@ function writeTotalRow(sheet, col, width, dataRows) {
   sheet.getRange(totalRow, 1, 1, width).clearDataValidations().setFontWeight('bold');
   cell('Fecha').setValue(TOTAL_LABEL);
 
-  const categoryCells = amountHeaders().map((header) => cell(header).getA1Notation());
-  cell('Detalle').setFormula(`=SUM(${categoryCells.join(',')})`).setNumberFormat(FORMAT_ARS);
   cell('USD').setFormula(sumOf('USD')).setNumberFormat(FORMAT_USD);
   amountHeaders().forEach((header) => {
     cell(header).setFormula(sumOf(header)).setNumberFormat(FORMAT_ARS);

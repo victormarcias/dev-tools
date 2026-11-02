@@ -1,7 +1,7 @@
 // Gmail Expenses: email parsing and USD conversion.
 // author: @victormarcias
 
-const DOLAR_TARJETA_URL = 'https://dolarapi.com/v1/dolares/tarjeta';
+const DOLARAPI_URL = 'https://dolarapi.com/v1/dolares/';
 
 // Returns { review: reason } when the mail can't be read, or { rows } (empty
 // when it should be marked as processed without a row). A mail with both a
@@ -31,7 +31,7 @@ function parseMessage(source, message) {
   // USD goes as is in its own column, and converted into the category
   if (usd) {
     const fx = usdRate();
-    let note = `USD ${usd} × ${fx.rate} (dólar tarjeta ${fx.date})`;
+    let note = `USD ${usd} × ${fx.rate} (dólar ${USD_RATE} ${fx.date})`;
     if (fx.stale) note += '\nDolarApi no respondió: cotización anterior.';
     rows.push({ ...base, ars: round2(usd * fx.rate), usd, note });
   }
@@ -84,19 +84,20 @@ function round2(value) {
 
 let cachedRate = null;
 
-// Dólar tarjeta (selling price) from DolarApi. When it fails, falls back to
-// the last rate that worked.
+// The USD_RATE dollar (selling price) from DolarApi. When it fails, falls
+// back to the last rate of that same type that worked.
 function usdRate() {
   if (cachedRate) return cachedRate;
   const props = PropertiesService.getScriptProperties();
+  const lastKey = `LAST_FX_${USD_RATE}`;
 
   try {
-    const response = UrlFetchApp.fetch(DOLAR_TARJETA_URL, { muteHttpExceptions: true });
+    const response = UrlFetchApp.fetch(DOLARAPI_URL + USD_RATE, { muteHttpExceptions: true });
     if (response.getResponseCode() === 200) {
       const data = JSON.parse(response.getContentText());
       if (data.venta > 0) {
         cachedRate = { rate: data.venta, date: data.fechaActualizacion.slice(0, 10), stale: false };
-        props.setProperty('LAST_FX', JSON.stringify(cachedRate));
+        props.setProperty(lastKey, JSON.stringify(cachedRate));
         return cachedRate;
       }
     }
@@ -104,8 +105,8 @@ function usdRate() {
     console.error(`DolarApi: ${error}`);
   }
 
-  const last = props.getProperty('LAST_FX');
-  if (!last) throw new Error('No USD rate available.');
+  const last = props.getProperty(lastKey);
+  if (!last) throw new Error(`No dólar ${USD_RATE} rate available.`);
   cachedRate = { ...JSON.parse(last), stale: true };
   return cachedRate;
 }

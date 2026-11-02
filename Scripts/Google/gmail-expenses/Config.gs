@@ -20,6 +20,10 @@ const DRY_RUN_HOURS = 24;
 // How much of the cleaned body dryRun() logs for emails that go to review.
 const DRY_RUN_BODY_LENGTH = 3000;
 
+// Which dollar USD amounts are converted at (selling price, from DolarApi):
+// 'cripto' or 'blue'. Any other dolarapi.com/v1/dolares/<type> works too.
+const USD_RATE = 'cripto';
+
 const LABEL_PROCESSED = 'Gastos/Procesado';
 const LABEL_REVIEW = 'Gastos/Revisar';
 

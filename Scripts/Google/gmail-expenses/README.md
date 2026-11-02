@@ -2,7 +2,7 @@
 
 📧 Google Apps Script that reads expense emails from Gmail every few hours and
 writes them into a Google Sheet, one row per transaction. Made for Argentina:
-amounts like `$ 12.345,67`, dólar tarjeta, local senders.
+amounts like `$ 12.345,67`, dólar cripto / blue, local senders.
 
 It only reads the email body, never PDF attachments.
 
@@ -28,7 +28,8 @@ One tab per month (`2026-11`). With the default categories, the columns are
 - One row per transaction, sorted by email date (`Fecha`), with the sender's
   name in `Detalle` (`Galicia`, `Uber`) and the amount in its category column.
 - `USD`: the original amount of USD charges. The same row also has the amount
-  in pesos in its category, at the dólar tarjeta from [DolarApi](https://dolarapi.com).
+  in pesos in its category, at the dollar set in `USD_RATE` (cripto by
+  default) from [DolarApi](https://dolarapi.com).
   The rate used is in the cell's note; if DolarApi is down, the last rate that
   worked is used and the note says so.
 - An email with both a pesos and a USD amount (a statement with both balances,
@@ -37,8 +38,8 @@ One tab per month (`2026-11`). With the default categories, the columns are
 - `Vencimiento`: due date for bills and statements.
 - `Estado`: Pagar / Pagado dropdown. Bills and statements come in as Pagar;
   switch them by hand once paid.
-- `TOTAL` row at the bottom: per-column sums, and the grand total in pesos under
-  `Detalle`. It's rebuilt on every run, so rows added by hand are included.
+- `TOTAL` row at the bottom: sums for every category and `USD`. It's rebuilt
+  on every run, so rows added by hand are included.
 
 ### Emails
 
@@ -125,6 +126,8 @@ Everything lives in [Config.gs](Config.gs); only IDs go in Script Properties.
   (default 24). Raise it to test patterns against older emails.
 - `DRY_RUN_BODY_LENGTH`: how much of the body `dryRun()` logs for
   emails that go to review (default 3000 characters).
+- `USD_RATE`: which dollar USD amounts are converted at, `'cripto'` (default)
+  or `'blue'`, selling price.
 - `BANKS`, `SERVICES`, `PREPAGAS`: senders, as they appear in the From name or
   address.
 - Patterns: each category has default regexes for `subject`, `amount`, `usd`
