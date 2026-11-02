@@ -8,7 +8,7 @@
 //   run()      processes every inbox email from a known sender that isn't
 //              labeled yet, however old. The trigger calls this; it can also
 //              be run by hand at any time.
-//   dryRun()   logs what the last DRY_RUN_DAYS of emails would produce,
+//   dryRun()   logs what the last DRY_RUN_HOURS of emails would produce,
 //              without labeling them or touching the sheet.
 
 function install() {
@@ -49,10 +49,10 @@ function run() {
     const finished = scanMessages(null, false, (source, id, message, result) => {
       if (result.review) {
         console.error(`${source.name} "${message.getSubject()}": ${result.review}`);
-        markMessage(id, labels.review, false);
+        markMessage(id, labels.review);
         return;
       }
-      if (result.row) rows.push(result.row);
+      rows.push(...result.rows);
       processed.push(id);
     }, deadline).finished;
 
@@ -64,7 +64,7 @@ function run() {
       const month = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
       writeRows(spreadsheet, month, rows);
     }
-    processed.forEach((id) => markMessage(id, labels.processed, ARCHIVE_PROCESSED));
+    processed.forEach((id) => markMessage(id, labels.processed));
 
     if (!finished) {
       console.warn(`Time budget reached after ${processed.length} emails: run() again to continue.`);
@@ -76,8 +76,8 @@ function run() {
 
 // For tuning Config.gs: one log line per email from a known sender, labeled
 // or not, saying what run() would do with it.
-function dryRun(days = DRY_RUN_DAYS) {
-  const since = Math.floor(Date.now() / 1000) - days * 86400;
+function dryRun(hours = DRY_RUN_HOURS) {
+  const since = Math.floor(Date.now() / 1000) - hours * 3600;
   const formatDate = (date) => Utilities.formatDate(date, Session.getScriptTimeZone(), 'dd/MM/yyyy');
   let count = 0;
 
@@ -85,21 +85,26 @@ function dryRun(days = DRY_RUN_DAYS) {
     count++;
     const email = `[${source.category}] ${formatDate(message.getDate())} ${source.name} – ${message.getSubject()}`;
     if (result.review) {
-      console.log(`REVIEW   ${email}\n         ${result.review}`);
-    } else if (!result.row) {
+      // The cleaned body is what the patterns run against, and it often
+      // differs from how the email looks.
+      const body = JSON.stringify(cleanBody(message).slice(0, DRY_RUN_BODY_LENGTH));
+      console.log(`REVIEW   ${email}\n         ${result.review}\n         body: ${body}`);
+    } else if (!result.rows.length) {
       console.log(`SKIP     ${email}\n         skipIf matched`);
     } else {
-      const row = result.row;
-      const details = [`$ ${row.ars}`];
-      if (row.usd) details.push(`USD ${row.usd}`);
-      if (row.due) details.push(`vence ${formatDate(row.due)}`);
-      details.push(row.status);
-      console.log(`OK       ${email}\n         ${details.join(' | ')}`);
+      result.rows.forEach((row, index) => {
+        const details = [`$ ${row.ars}`];
+        if (row.usd) details.push(`USD ${row.usd}`);
+        if (row.due) details.push(`vence ${formatDate(row.due)}`);
+        details.push(row.status);
+        const prefix = index ? '         ' : `OK       ${email}\n         `;
+        console.log(`${prefix}${details.join(' | ')}`);
+      });
     }
   });
 
   unmatched.forEach((email) => console.log(`IGNORED  ${email}\n         subject didn't match`));
-  console.log(`${count} handled, ${unmatched.length} ignored in the last ${days} days.`);
+  console.log(`${count} handled, ${unmatched.length} ignored in the last ${hours} hours.`);
 }
 
 // Calls handle(source, id, message, result) once per inbox email from a known

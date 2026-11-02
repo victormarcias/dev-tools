@@ -3,41 +3,47 @@
 
 const DOLAR_TARJETA_URL = 'https://dolarapi.com/v1/dolares/tarjeta';
 
-// Returns { review: reason } when the mail can't be read, { row: null } when
-// it should be marked as processed without a row, or { row } otherwise.
+// Returns { review: reason } when the mail can't be read, or { rows } (empty
+// when it should be marked as processed without a row). A mail with both a
+// pesos and a USD amount (a card statement with both balances) gives two rows:
+// one in pesos, and one with the USD amount and its conversion to pesos.
 function parseMessage(source, message) {
-  const body = message.getPlainBody();
+  const body = cleanBody(message);
 
-  if (source.skipIf && source.skipIf.test(body)) return { row: null };
+  if (source.skipIf && source.skipIf.test(body)) return { rows: [] };
   if (source.onlyIf && !source.onlyIf.test(body)) return { review: 'onlyIf did not match' };
 
-  let ars = source.amount ? parseAmount(firstMatch(source.amount, body)) : null;
+  const ars = source.amount ? parseAmount(firstMatch(source.amount, body)) : null;
   const usd = source.usd ? parseAmount(firstMatch(source.usd, body)) : null;
   if (!ars && !usd) return { review: 'no amount found' };
 
+  const base = {
+    date: message.getDate(),
+    detail: source.name,
+    category: source.category,
+    due: source.due ? parseDate(firstMatch(source.due, body)) : null,
+    status: source.status,
+  };
+  const rows = [];
+
+  if (ars) rows.push({ ...base, ars: round2(ars), usd: null, note: '' });
+
   // USD goes as is in its own column, and converted into the category
-  let note = '';
   if (usd) {
     const fx = usdRate();
-    ars = (ars || 0) + usd * fx.rate;
-    note = `USD ${usd} × ${fx.rate} (dólar tarjeta ${fx.date})`;
+    let note = `USD ${usd} × ${fx.rate} (dólar tarjeta ${fx.date})`;
     if (fx.stale) note += '\nDolarApi no respondió: cotización anterior.';
+    rows.push({ ...base, ars: round2(usd * fx.rate), usd, note });
   }
 
-  const due = source.due ? parseDate(firstMatch(source.due, body)) : null;
+  return { rows };
+}
 
-  return {
-    row: {
-      date: message.getDate(),
-      detail: truncate(`${source.name} – ${message.getSubject()}`, DETAIL_MAX_LENGTH),
-      category: source.category,
-      ars: round2(ars),
-      usd: usd || null,
-      due,
-      status: source.status,
-      note,
-    },
-  };
+// The plain text version of the email, with what gets in the way of the
+// patterns removed: *bold* and _italic_ markers, and line breaks (everything
+// ends up on one line, single-spaced).
+function cleanBody(message) {
+  return message.getPlainBody().replace(/[*_]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 function firstMatch(regex, text) {
@@ -70,12 +76,6 @@ function parseDate(text) {
     : text.split('/').map(Number);
   if (!month) return null;
   return new Date(year < 100 ? 2000 + year : year, month - 1, day);
-}
-
-// Collapses whitespace and cuts at `max` characters, "…" included
-function truncate(text, max) {
-  const clean = text.replace(/\s+/g, ' ').trim();
-  return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean;
 }
 
 function round2(value) {

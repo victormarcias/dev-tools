@@ -1,6 +1,5 @@
-// Gmail Expenses: spreadsheet writing. Every monthly tab follows
-// gastos.example.csv: header, one row per transaction sorted by date, and a
-// TOTAL row at the bottom.
+// Gmail Expenses: spreadsheet writing. Every monthly tab has a header, one
+// row per transaction sorted by date, and a TOTAL row at the bottom.
 // author: @victormarcias
 //
 // Columns are matched by header name, not position, so tabs created before a

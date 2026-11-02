@@ -23,11 +23,8 @@ function findMessageIds(source, since, includeLabeled) {
   return ids;
 }
 
-function markMessage(id, labelId, archive) {
-  Gmail.Users.Messages.modify({
-    addLabelIds: [labelId],
-    removeLabelIds: archive ? ['INBOX'] : [],
-  }, 'me', id);
+function markMessage(id, labelId) {
+  Gmail.Users.Messages.modify({ addLabelIds: [labelId] }, 'me', id);
 }
 
 function getLabelIds() {

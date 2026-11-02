@@ -10,8 +10,8 @@ It only reads the email body, never PDF attachments.
 
 | Column | Senders | Estado |
 |---|---|---|
-| Tarjetas | `BANKS` (credit card statements: one row with the statement total) | Pagar |
-| Transporte (Auto) | Uber, Cabify | Pagado |
+| Tarjetas | `BANKS` (credit card statements only, not account statements: one row per balance, ARS and USD) | Pagar |
+| Transporte | Uber, Cabify | Pagado |
 | Compras | MercadoLibre, only debit / account money purchases | Pagado |
 | Servicios | `SERVICES` ("tu factura está disponible") | Pagar |
 | Salud | `PREPAGAS` (health insurance) | Pagar |
@@ -19,17 +19,21 @@ It only reads the email body, never PDF attachments.
 
 ### The sheet
 
-One tab per month (`2026-11`), every tab following
-[gastos.example.csv](gastos.example.csv) (with the default categories):
+One tab per month (`2026-11`). With the default categories, the columns are
+`Fecha`, `Detalle`, `Tarjetas`, `Transporte`, `Compras`, `Servicios`, `Salud`,
+`Delivery`, `USD`, `Vencimiento` and `Estado`.
 
 - Each run writes to the tab of the month **it runs in**, not the email's: a
   bill sent on the 31st lands in next month's tab, when it's paid.
-- One row per transaction, sorted by email date (`Fecha`), with the amount in
-  its category column.
-- `USD`: the original amount of USD charges. The same charge is also added to
-  its category in pesos, at the dólar tarjeta from [DolarApi](https://dolarapi.com).
+- One row per transaction, sorted by email date (`Fecha`), with the sender's
+  name in `Detalle` (`Galicia`, `Uber`) and the amount in its category column.
+- `USD`: the original amount of USD charges. The same row also has the amount
+  in pesos in its category, at the dólar tarjeta from [DolarApi](https://dolarapi.com).
   The rate used is in the cell's note; if DolarApi is down, the last rate that
   worked is used and the note says so.
+- An email with both a pesos and a USD amount (a statement with both balances,
+  like Brubank's or Galicia's) gives two rows: one with the pesos balance, and
+  one with the USD balance and its conversion.
 - `Vencimiento`: due date for bills and statements.
 - `Estado`: Pagar / Pagado dropdown. Bills and statements come in as Pagar;
   switch them by hand once paid.
@@ -38,8 +42,8 @@ One tab per month (`2026-11`), every tab following
 
 ### Emails
 
-- Processed: labeled `Gastos/Procesado`. Left in the inbox unless
-  `ARCHIVE_PROCESSED` is on.
+- Processed: labeled `Gastos/Procesado` and left in the inbox. Delete them
+  once they're in the sheet.
 - From a known sender but the amount couldn't be read: labeled `Gastos/Revisar`
   and left in the inbox, no row added. After fixing the patterns, remove the
   label and the next run picks it up again.
@@ -117,12 +121,10 @@ Everything lives in [Config.gs](Config.gs); only IDs go in Script Properties.
 - `RUN_EVERY_HOURS`: hours between runs (1, 2, 4, 6, 8 or 12; default 2).
   Run `install()` again after changing it. There's no "on new email" trigger
   in Apps Script, so this is as close as it gets.
-- `ARCHIVE_PROCESSED`: also archive processed emails (default `false`, labels
-  only).
-- `DETAIL_MAX_LENGTH`: longest `Detalle` ("Sender – Subject"); longer ones
-  are cut with "…" (default 80).
-- `DRY_RUN_DAYS`: how many days back `dryRun()` looks in the inbox (default
-  1). Raise it to test patterns against older emails.
+- `DRY_RUN_HOURS`: how many hours back `dryRun()` looks in the inbox
+  (default 24). Raise it to test patterns against older emails.
+- `DRY_RUN_BODY_LENGTH`: how much of the body `dryRun()` logs for
+  emails that go to review (default 3000 characters).
 - `BANKS`, `SERVICES`, `PREPAGAS`: senders, as they appear in the From name or
   address.
 - Patterns: each category has default regexes for `subject`, `amount`, `usd`
@@ -171,17 +173,24 @@ too.
 #### Testing changes
 
 After editing `Config.gs` (and `clasp push`, if using clasp), run `dryRun()`
-from the editor. It looks at the last `DRY_RUN_DAYS` days of inbox emails from
-every known sender, labeled or not, and logs what `run()` would do with each one, without
-labeling anything or touching the sheet:
+from the editor. It looks at the last `DRY_RUN_HOURS` hours of inbox emails
+from every known sender, labeled or not, and logs what `run()` would do with
+each one, without labeling anything or touching the sheet:
 
 ```
 OK       [Salud] 12/11/2026 OSDE – Tu factura está disponible
          $ 185000 | vence 22/11/2026 | Pagar
 REVIEW   [Servicios] 05/11/2026 Ecogas – Tu factura está disponible
          no amount found
+         body: "Hola,\nTu factura de noviembre ya está disponible…"
 SKIP     [Compras] 08/11/2026 MercadoLibre – Compraste Auriculares
          skipIf matched
 IGNORED  Rappi – 50% OFF en tu próximo pedido
          subject didn't match
 ```
+
+For emails that go to review it also logs the start of the body the patterns
+run against: write custom patterns against that text, since it often differs
+from how the email looks. It's the email's plain text version, cleaned up:
+`*bold*` / `_italic_` markers removed and everything on one line, with single
+spaces, so patterns never need to deal with line breaks.
