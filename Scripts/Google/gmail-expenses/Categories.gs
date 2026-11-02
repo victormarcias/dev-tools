@@ -117,6 +117,25 @@ const PREPAGAS = [
 // `viaPayments`: the senders' own emails are never read; their names only
 // decide the category of a payment to them (see PAYMENTS).
 const CATEGORIES = {
+  'Hogar': {
+    entries: HOGAR,
+    viaPayments: true,
+  },
+  'Servicios': {
+    // Only the digital services are read (they set viaPayments: false)
+    entries: SERVICES,
+    viaPayments: true,
+    amount: AMOUNT_ARS,
+    status: STATUS_PAID,
+  },
+  'Salud': {
+    entries: PREPAGAS,
+    subject: /factura|disponible|cuota/i,
+    amount: AMOUNT_ARS,
+    due: DUE_DATE,
+    // Paid by automatic debit: the bill is already paid when it's due
+    status: STATUS_PAID,
+  },
   'Tarjetas': {
     entries: BANKS,
     // "Resumen" plus a card, in any order, so account statements (caja de
@@ -151,25 +170,6 @@ const CATEGORIES = {
       },
     ],
     amount: AMOUNT_ARS,
-    status: STATUS_PAID,
-  },
-  'Hogar': {
-    entries: HOGAR,
-    viaPayments: true,
-  },
-  'Servicios': {
-    // Only the digital services are read (they set viaPayments: false)
-    entries: SERVICES,
-    viaPayments: true,
-    amount: AMOUNT_ARS,
-    status: STATUS_PAID,
-  },
-  'Salud': {
-    entries: PREPAGAS,
-    subject: /factura|disponible|cuota/i,
-    amount: AMOUNT_ARS,
-    due: DUE_DATE,
-    // Paid by automatic debit: the bill is already paid when it's due
     status: STATUS_PAID,
   },
   'Delivery': {
