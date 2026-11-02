@@ -1,3 +1,5 @@
 **/**
 !*.gs
 !appsscript.json
+# The template would redeclare TRANSFERS
+Transfers.example.gs

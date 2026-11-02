@@ -74,7 +74,7 @@ function run() {
   }
 }
 
-// For tuning Config.gs: one log line per email from a known sender, labeled
+// For tuning Categories.gs: one log line per email from a known sender, labeled
 // or not, saying what run() would do with it.
 function dryRun(hours = DRY_RUN_HOURS) {
   const since = Math.floor(Date.now() / 1000) - hours * 3600;
@@ -117,7 +117,7 @@ function scanMessages(since, includeLabeled, handle, deadline = Infinity) {
   const unmatched = {};
   let finished = true;
 
-  sources().forEach((source) => {
+  sources().filter((source) => !source.viaPayments).forEach((source) => {
     if (!finished) return;
     findMessageIds(source, since, includeLabeled).forEach((id) => {
       // The same sender can feed two categories (Uber / Uber Eats)
@@ -150,14 +150,31 @@ function scanMessages(since, includeLabeled, handle, deadline = Infinity) {
 }
 
 // Flattens CATEGORIES into one source per sender, with the category defaults
-// applied. Fails early on incomplete entries, since Config.gs is hand-edited.
+// applied. Fails early on incomplete entries, since Categories.gs is hand-edited.
 function sources() {
+  if (!CATEGORIES[PAYMENTS.category]) {
+    throw new Error(`PAYMENTS: unknown category "${PAYMENTS.category}".`);
+  }
+  const aliases = transfers();
+  Object.keys(aliases).forEach((alias) => {
+    if (!CATEGORIES[aliases[alias]]) {
+      throw new Error(`TRANSFERS / ${alias}: unknown category "${aliases[alias]}".`);
+    }
+  });
+  const groups = Object.keys(CATEGORIES).map((category) => ({ ...CATEGORIES[category], category }));
+  // Payments last: a wallet can also send card statements
+  groups.push({ ...PAYMENTS, payment: true });
+
   const result = [];
-  Object.keys(CATEGORIES).forEach((category) => {
-    const { entries, ...defaults } = CATEGORIES[category];
+  groups.forEach(({ entries, category, ...defaults }) => {
     entries.forEach((entry) => {
       const overrides = typeof entry === 'string' ? { name: entry } : entry;
       const source = { ...defaults, from: overrides.name, ...overrides, category };
+      // Never scanned: only used to categorize payments
+      if (source.viaPayments) {
+        result.push(source);
+        return;
+      }
       if (!source.subject) throw new Error(`${category} / ${source.name}: missing subject pattern.`);
       if (!source.amount && !source.usd) throw new Error(`${category} / ${source.name}: missing amount pattern.`);
       if (!source.status) throw new Error(`${category} / ${source.name}: missing status.`);

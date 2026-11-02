@@ -24,6 +24,13 @@ function parseMessage(source, message) {
     due: source.due ? parseDate(firstMatch(source.due, body)) : null,
     status: source.status,
   };
+
+  // A payment is named after who was paid, and goes in their category
+  if (source.payment) {
+    const subject = message.getSubject();
+    base.detail = (source.payee && firstMatch(source.payee, subject)) || subject;
+    base.category = aliasCategory(`${subject} ${body}`) || categoryOf(base.detail) || source.category;
+  }
   const rows = [];
 
   if (ars) rows.push({ ...base, ars: round2(ars), usd: null, note: '' });
@@ -37,6 +44,31 @@ function parseMessage(source, message) {
   }
 
   return { rows };
+}
+
+// The category of the first transfer alias that appears in `text`, or null
+function aliasCategory(text) {
+  const aliases = transfers();
+  const alias = Object.keys(aliases).find((name) => sameName(text, name));
+  return alias ? aliases[alias] : null;
+}
+
+// TRANSFERS lives in Transfers.gs, which is git-ignored and may not exist
+function transfers() {
+  return typeof TRANSFERS === 'undefined' ? {} : TRANSFERS;
+}
+
+// The category of the first non-payment sender whose name is in `text`
+// ("X" → X's category), or null.
+function categoryOf(text) {
+  const source = sources().find((s) => !s.payment && sameName(text, s.name));
+  return source ? source.category : null;
+}
+
+// Whether `name` appears in `text`, ignoring case, accents and spaces
+function sameName(text, name) {
+  const normalize = (value) => String(value).normalize('NFD').replace(/[\u0300-\u036f\s]/g, '').toLowerCase();
+  return Boolean(normalize(name)) && normalize(text).includes(normalize(name));
 }
 
 // The plain text version of the email, with what gets in the way of the

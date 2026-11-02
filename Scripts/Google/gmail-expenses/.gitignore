@@ -1,2 +1,5 @@
 # Holds the scriptId
 .clasp.json
+
+# Transfer aliases
+Transfers.gs

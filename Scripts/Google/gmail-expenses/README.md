@@ -12,16 +12,17 @@ It only reads the email body, never PDF attachments.
 |---|---|---|
 | Tarjetas | `BANKS` (credit card statements only, not account statements: one row per balance, ARS and USD) | Pagar |
 | Transporte | Uber, Cabify | Pagado |
-| Compras | MercadoLibre, only debit / account money purchases | Pagado |
-| Servicios | `SERVICES` ("tu factura está disponible") | Pagar |
-| Salud | `PREPAGAS` (health insurance) | Pagar |
+| Compras | MercadoLibre, only debit / account money purchases; payments and transfers to anyone not known (see below) | Pagado |
+| Hogar | Payments to `HOGAR` (electricity, gas, water, municipal taxes) and transfers to `TRANSFERS` aliases (expensas, cleaning). Their bills are ignored | Pagado |
+| Servicios | Payments to `SERVICES` phone, internet and TV (bills ignored). Digital services (streaming, music, games, apps, cloud, AI): their receipts, ARS or USD, credit card charges skipped | Pagado |
+| Salud | `PREPAGAS` (health insurance), paid by automatic debit | Pagado |
 | Delivery | PedidosYa (orders and Plus), Rappi (orders and Prime), Uber Eats | Pagado |
 
 ### The sheet
 
 One tab per month (`2026-11`). With the default categories, the columns are
-`Fecha`, `Detalle`, `Tarjetas`, `Transporte`, `Compras`, `Servicios`, `Salud`,
-`Delivery`, `USD`, `Vencimiento` and `Estado`.
+`Fecha`, `Detalle`, `Tarjetas`, `Transporte`, `Compras`, `Hogar`, `Servicios`,
+`Salud`, `Delivery`, `USD`, `Vencimiento` and `Estado`.
 
 - Each run writes to the tab of the month **it runs in**, not the email's: a
   bill sent on the 31st lands in next month's tab, when it's paid.
@@ -36,8 +37,16 @@ One tab per month (`2026-11`). With the default categories, the columns are
   like Brubank's or Galicia's) gives two rows: one with the pesos balance, and
   one with the USD balance and its conversion.
 - `Vencimiento`: due date for bills and statements.
-- `Estado`: Pagar / Pagado dropdown. Bills and statements come in as Pagar;
+- `Estado`: Pagar / Pagado dropdown. Only card statements come in as Pagar;
   switch them by hand once paid.
+- Payments: house and phone/internet bills are paid through Mercado Pago, so
+  their bills are ignored and only what was actually paid is added. Each
+  payment or transfer confirmation from a `PAYMENTS` sender ("Pago aprobado
+  en Edemsa", "Transferiste a Consorcio") is a Pagado row named after the
+  payee, in the category of the recipient's alias if it's in `TRANSFERS`, or
+  of a known sender with the payee's name (`Hogar` for Edemsa), or `Compras`
+  if none. Paid by credit card, it
+  adds nothing: it's already in the statement.
 - `TOTAL` row at the bottom: sums for every category and `USD`. It's rebuilt
   on every run, so rows added by hand are included.
 
@@ -59,16 +68,19 @@ One tab per month (`2026-11`). With the default categories, the columns are
 
 Card statements are added to the total. Anything paid with a credit card that
 also has its own email (an Uber, a bill, the prepaga) is counted twice: once in
-its column and once inside the statement. MercadoLibre already skips credit
-card purchases for this reason; the rest don't, since they're assumed to be
-paid with debit or account money.
+its column and once inside the statement. MercadoLibre, streaming and payments
+already skip credit card charges for this reason (`CREDIT_CARD`, when the
+email says so); the rest don't, since they're assumed to be paid with debit or
+account money.
 
 ### Setup
 
 1. Create a Google Sheet (set *File → Settings → Locale* to Argentina) and copy
    its ID from the URL: `docs.google.com/spreadsheets/d/<FILE_ID>/edit`.
 2. Create an empty project at https://script.google.com.
-3. Upload the code, with either option below.
+3. Upload the code, with either option below. Copy `Transfers.example.gs` to
+   `Transfers.gs` and fill in your aliases first (optional: without it,
+   every transfer goes to `Compras`).
 4. In the Apps Script editor: *Project Settings → Script Properties* → add
    `FILE_ID` with the sheet's ID.
 5. Run `install()` from the editor and accept the permissions. That creates the
@@ -81,7 +93,7 @@ of the trigger.
 
 [clasp](https://github.com/google/clasp) is Google's CLI for Apps Script:
 `clasp push` uploads the local files, `clasp pull` downloads the ones in the
-web editor. Handy when editing `Config.gs` often, and it keeps the repo and
+web editor. Handy when editing `Config.gs` or `Categories.gs` often, and it keeps the repo and
 what runs in Google in sync.
 
 1. Install it, log in, and enable the Apps Script API at
@@ -103,8 +115,9 @@ After that, every change is a `clasp push`, and `clasp open-script` opens the ed
 #### Option B: copy by hand (from the web)
 
 1. In the editor, create one script file per `.gs` file, with the same names
-   (`Config`, `Gmail`, `Main`, `Parse`, `Sheet`), and paste each one's
-   content.
+   (`Config`, `Categories`, `Gmail`, `Main`, `Parse`, `Sheet`, and
+   `Transfers` if you have it), and paste each one's content. Never
+   `Transfers.example`.
 2. *Project Settings* → check *Show "appsscript.json" manifest file in editor*,
    then paste the content of [appsscript.json](appsscript.json) into it. Don't
    skip it: it sets the time zone and enables the Gmail API.
@@ -117,7 +130,11 @@ or with `clasp pull` if you set up clasp later.
 
 ### Configuration
 
-Everything lives in [Config.gs](Config.gs); only IDs go in Script Properties.
+Settings live in [Config.gs](Config.gs); senders, categories and patterns in
+[Categories.gs](Categories.gs); transfer aliases in `Transfers.gs`. Only IDs go
+in Script Properties.
+
+In `Config.gs`:
 
 - `RUN_EVERY_HOURS`: hours between runs (1, 2, 4, 6, 8 or 12; default 2).
   Run `install()` again after changing it. There's no "on new email" trigger
@@ -128,15 +145,19 @@ Everything lives in [Config.gs](Config.gs); only IDs go in Script Properties.
   emails that go to review (default 3000 characters).
 - `USD_RATE`: which dollar USD amounts are converted at, `'cripto'` (default)
   or `'blue'`, selling price.
-- `BANKS`, `SERVICES`, `PREPAGAS`: senders, as they appear in the From name or
-  address.
+
+In `Categories.gs`:
+
+- `BANKS`, `SERVICES` (digital), `PREPAGAS`: senders, as they appear in the From name or
+  address. `HOGAR` and the rest of `SERVICES` are names, as they appear in
+  payment emails (`viaPayments`): their own emails are never read.
 - Patterns: each category has default regexes for `subject`, `amount`, `usd`
   and `due` (the first capture group is the value). Any list entry can be an
   object that overrides them for that sender:
   ```js
-  const SERVICES = [
-    'AYSAM',
-    { name: 'Ecogas', from: 'ecogas.com.ar', amount: /Importe\s*\$\s*([\d.,]+)/i },
+  const PREPAGAS = [
+    'Galeno',
+    { name: 'OSDE', from: 'osde.com.ar', amount: /Importe\s*\$\s*([\d.,]+)/i },
   ];
   ```
 - Amounts: the captured number can use either format (`12.345,67` or
@@ -146,13 +167,24 @@ Everything lives in [Config.gs](Config.gs); only IDs go in Script Properties.
   `` new RegExp(`Importe\\s*${PESOS}\\s*([\\d.,]+)`, 'i') ``.
 - `skipIf` / `onlyIf`: body patterns. `skipIf` marks the email as processed without a row;
   if `onlyIf` doesn't match, the email goes to review.
+- `PAYMENTS`: senders of payment and transfer confirmations (wallets,
+  homebanking), with generic `subject`, `excludeSubject`, `amount` and
+  `payee` (on the subject, the capture group is who was paid) patterns.
+  Adding a wallet is usually just its name or domain in `entries`.
+  `category` is where payments to anyone not known go.
+- `TRANSFERS`, in `Transfers.gs`: the aliases you transfer to and their
+  category (`'x.y.z': 'Hogar'` for expensas). The alias is looked for in the
+  whole payment email, ignoring case and accents. The file is git-ignored so
+  aliases never reach GitHub; `Transfers.example.gs` is its template, and
+  `.claspignore` keeps the template out of Apps Script (it would declare
+  `TRANSFERS` twice). `clasp push` does upload `Transfers.gs`.
 
 The default patterns are generic: tune them with the emails that end up in
 `Gastos/Revisar`.
 
 #### Adding a category
 
-Add a key to `CATEGORIES`: the key is the column name, and the order of the
+Add a key to `CATEGORIES` (in `Categories.gs`): the key is the column name, and the order of the
 keys is the order of the columns (between `Detalle` and `USD`). It needs
 `entries`, a `subject` and an `amount` (or `usd`) pattern and a `status`,
 either at the category level or in each entry; `run()` fails with a clear
@@ -175,17 +207,17 @@ too.
 
 #### Testing changes
 
-After editing `Config.gs` (and `clasp push`, if using clasp), run `dryRun()`
+After editing `Config.gs` or `Categories.gs` (and `clasp push`, if using clasp), run `dryRun()`
 from the editor. It looks at the last `DRY_RUN_HOURS` hours of inbox emails
 from every known sender, labeled or not, and logs what `run()` would do with
 each one, without labeling anything or touching the sheet:
 
 ```
 OK       [Salud] 12/11/2026 OSDE – Tu factura está disponible
-         $ 185000 | vence 22/11/2026 | Pagar
-REVIEW   [Servicios] 05/11/2026 Ecogas – Tu factura está disponible
+         $ 185000 | vence 22/11/2026 | Pagado
+REVIEW   [Compras] 05/11/2026 Mercado Pago – Pago aprobado en Edemsa
          no amount found
-         body: "Hola,\nTu factura de noviembre ya está disponible…"
+         body: "Hola,\nLe pagaste a Edemsa…"
 SKIP     [Compras] 08/11/2026 MercadoLibre – Compraste Auriculares
          skipIf matched
 IGNORED  Rappi – 50% OFF en tu próximo pedido
