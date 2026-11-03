@@ -19,5 +19,6 @@ const DRY_RUN_BODY_LENGTH = 3000;
 // 'cripto' or 'blue'. Any other dolarapi.com/v1/dolares/<type> works too.
 const USD_RATE = 'cripto';
 
-const LABEL_PROCESSED = 'Gastos/Procesado';
-const LABEL_REVIEW = 'Gastos/Revisar';
+// Every handled email gets this label, read or not (the reason is in the
+// run's log), and is never looked at again by run().
+const LABEL = 'Gmail Expenses';

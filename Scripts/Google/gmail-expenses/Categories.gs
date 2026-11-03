@@ -26,6 +26,13 @@ const CREDIT_CARD = /tarjeta de cr[eé]dito|credit card|cuotas/i;
 // Subject of a receipt (as opposed to a bill or a promo)
 const RECEIPT = /recibo|pago|factura|cobro|compra|receipt|purchase|payment/i;
 
+// Subject of a payment email that isn't money going out: money coming in,
+// refunds, and failed or pending payments
+const NOT_PAID = new RegExp([
+  'recibiste', 'cobraste', 'devoluci[oó]n', 'reintegro', 'reembolso', 'refund',
+  'rechazad', 'pendiente', 'cancelad', 'fall[oói]', 'declined', 'failed',
+].join('|'), 'i');
+
 // Credit card statements (resumen de tarjeta).
 const BANKS = [
   // Value first, then its label: "11 Noviembre 2026 Fecha de vencimiento
@@ -181,23 +188,52 @@ const CATEGORIES = {
     amount: AMOUNT_ARS,
     status: STATUS_PAID,
   },
+  // No senders of its own: payment confirmations from senders that aren't
+  // known ('Otros pagos', in PAYMENTS)
+  'Otros': {
+    entries: [],
+  },
 };
 
 // Payment and transfer confirmations, from any wallet or homebanking ("Pago
 // aprobado en X", "Pagaste tu factura de X", "Transferiste a X"). They're not
 // a column: each one is a Pagado row named after the `payee` (or the
 // subject), in the category of the recipient's alias (TRANSFERS, in
-// Transfers.gs) or of a known sender with that name, or `category` if none. Paid by credit card (skipIf), it adds nothing: it's
-// already in the statement. Entries accept the same overrides as any
-// category's.
+// Transfers.gs) or of a known sender with that name, or `category` if none.
+// Paid by credit card (skipIf), it adds nothing: it's already in the
+// statement. Entries accept the same overrides as any category's, `category`
+// included.
 const PAYMENTS = {
   entries: [
     { name: 'Mercado Pago', from: 'mercadopago.com.ar' },
+    // Any other sender: payment confirmations from gateways and shops ("Tu
+    // pago ha sido acreditado a X.", "Pago aprobado", "Confirmación de
+    // compra"). Emails from a known sender (Mercado Pago included) never get
+    // here. Named after the payee in the subject or, failing that, the
+    // sender's name.
+    {
+      name: 'Otros pagos',
+      anySender: true,
+      // Gmail can't search with regexes: this narrows the search, and
+      // `subject` decides
+      query: 'subject:(pago OR compra OR payment OR comprobante OR recibo)',
+      subject: new RegExp([
+        'pago (?:ha sido |fue )?(?:acreditado|aprobado|confirmado|exitoso|realizado|recibido)',
+        '(?:confirmaci[oó]n|comprobante|recibo) de (?:tu )?(?:pago|compra)',
+        'recibimos tu pago',
+        'compra (?:fue )?(?:aprobada|confirmada|exitosa)',
+        'gracias por tu (?:pago|compra)',
+        'payment (?:confirmation|received|successful|receipt)',
+      ].join('|'), 'i'),
+      // NOT_PAID, plus bills and reminders, which come before paying
+      excludeSubject: new RegExp(`${NOT_PAID.source}|vence|vencimiento|recordatorio|reminder|\\bdue\\b`, 'i'),
+      payee: /(?:acreditado|aprobado|realizado|pago|compra) (?:a|en)\s+(.+?)\.?$/i,
+      category: 'Otros',
+    },
   ],
   subject: /pago|pagaste|compraste|transferiste|transferencia|enviaste/i,
-  // Money coming in, failed payments, and purchases already handled by
-  // their own entry in Compras
-  excludeSubject: /recibiste|cobraste|devoluci[oó]n|reintegro|rechazad|pendiente|mercado ?libre/i,
+  // NOT_PAID, plus purchases already handled by their own entry in Compras
+  excludeSubject: new RegExp(`${NOT_PAID.source}|mercado ?libre`, 'i'),
   // On the subject; the capture group is who was paid
   payee: /(?:aprobado en|pagaste(?: tu factura de| a)?|compraste a|pago (?:a|de|en)|transferiste a|transferencia a|enviaste dinero a)\s+(.+)$/i,
   amount: new RegExp(`(?:pagaste|transferiste|enviaste|pago de|total|importe|monto)[^\\d$]{0,40}?${PESOS}\\s*([\\d.,]+)`, 'i'),

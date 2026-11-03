@@ -28,7 +28,9 @@ function parseMessage(source, message) {
   // A payment is named after who was paid, and goes in their category
   if (source.payment) {
     const subject = message.getSubject();
-    base.detail = (source.payee && firstMatch(source.payee, subject)) || subject;
+    const payee = source.payee && firstMatch(source.payee, subject);
+    // Any sender: its name says more than a generic subject ("Pago aprobado")
+    base.detail = payee || (source.anySender && senderName(message)) || subject;
     base.category = aliasCategory(`${subject} ${body}`) || categoryOf(base.detail) || source.category;
   }
   const rows = [];
@@ -44,6 +46,13 @@ function parseMessage(source, message) {
   }
 
   return { rows };
+}
+
+// The From display name ("X <no-reply@x.com>" → X), or the address
+function senderName(message) {
+  const from = message.getFrom();
+  const name = from.replace(/<[^>]*>/, '').replace(/"/g, '').trim();
+  return name || from.replace(/[<>]/g, '').trim();
 }
 
 // The category of the first transfer alias that appears in `text`, or null

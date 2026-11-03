@@ -1,6 +1,6 @@
 ## Gmail Expenses
 
-📧 Google Apps Script that reads expense emails from Gmail every few hours and
+📧 Google Apps Script that reads expense emails from Gmail every hour and
 writes them into a Google Sheet, one row per transaction. Made for Argentina:
 amounts like `$ 12.345,67`, dólar cripto / blue, local senders.
 
@@ -17,12 +17,13 @@ It only reads the email body, never PDF attachments.
 | Transporte | Uber, Cabify | Pagado |
 | Compras | MercadoLibre, only debit / account money purchases; payments and transfers to anyone not known (see below) | Pagado |
 | Delivery | PedidosYa (orders and Plus), Rappi (orders and Prime), Uber Eats | Pagado |
+| Otros | Payment confirmations from any other sender (gateways, shops: "Tu pago ha sido acreditado a X", "Pago aprobado"), never from a known one | Pagado |
 
 ### The sheet
 
 One tab per month (`2026-11`). With the default categories, the columns are
 `Fecha`, `Detalle`, `Hogar`, `Servicios`, `Salud`, `Tarjetas`, `Transporte`,
-`Compras`, `Delivery`, `USD`, `Vencimiento` and `Estado`.
+`Compras`, `Delivery`, `Otros`, `USD`, `Vencimiento` and `Estado`.
 
 - Each run writes to the tab of the month **it runs in**, not the email's: a
   bill sent on the 31st lands in next month's tab, when it's paid.
@@ -45,21 +46,25 @@ One tab per month (`2026-11`). With the default categories, the columns are
   en Edemsa", "Transferiste a Consorcio") is a Pagado row named after the
   payee, in the category of the recipient's alias if it's in `TRANSFERS`, or
   of a known sender with the payee's name (`Hogar` for Edemsa), or `Compras`
-  if none. Paid by credit card, it
+  if none. Confirmations from any sender that isn't known (a payment gateway,
+  a shop) are picked up by their subject and go to `Otros` unless the payee is
+  known; they're named after the payee in the subject, or the sender. Paid by credit card, it
   adds nothing: it's already in the statement.
 - `TOTAL` row at the bottom: sums for every category and `USD`. It's rebuilt
   on every run, so rows added by hand are included.
 
 ### Emails
 
-- Processed: labeled `Gastos/Procesado` and left in the inbox. Delete them
-  once they're in the sheet.
-- From a known sender but the amount couldn't be read: labeled `Gastos/Revisar`
-  and left in the inbox, no row added. After fixing the patterns, remove the
-  label and the next run picks it up again.
-- Each run looks at every email in the inbox from a known sender that has
-  neither label, however old. Labeled emails are skipped, so a row is never
-  added twice. Archived emails are never looked at.
+- Every handled email is labeled `Gmail Expenses` and left in the inbox.
+  Delete them once they're in the sheet.
+- If the amount couldn't be read, it's labeled all the same, with no row: the
+  reason is only in the run's log (*Executions* in the Apps Script editor).
+  After fixing the patterns, remove the label and the next run picks it up
+  again.
+- Each run looks at every unlabeled inbox email from a known sender, and at
+  payment confirmations from any other sender, however old. Labeled emails
+  are skipped, so a row is never added twice. Archived emails are never
+  looked at.
 - A run stops scanning after 4 minutes (Apps Script kills it at 6), writes
   what it has and labels only those emails; the rest wait for the next run.
   The first run on a full inbox may need a few manual `run()`s.
@@ -136,7 +141,7 @@ in Script Properties.
 
 In `Config.gs`:
 
-- `RUN_EVERY_HOURS`: hours between runs (1, 2, 4, 6, 8 or 12; default 2).
+- `RUN_EVERY_HOURS`: hours between runs (1, 2, 4, 6, 8 or 12; default 1).
   Run `install()` again after changing it. There's no "on new email" trigger
   in Apps Script, so this is as close as it gets.
 - `DRY_RUN_HOURS`: how many hours back `dryRun()` looks in the inbox
@@ -171,7 +176,10 @@ In `Categories.gs`:
   homebanking), with generic `subject`, `excludeSubject`, `amount` and
   `payee` (on the subject, the capture group is who was paid) patterns.
   Adding a wallet is usually just its name or domain in `entries`.
-  `category` is where payments to anyone not known go.
+  `category` is where payments to anyone not known go; an entry can set its
+  own. The `anySender` entry (`Otros pagos`) has no sender: it searches Gmail
+  with `query` and keeps the emails whose subject matches, skipping any from
+  a known sender (any list in `Categories.gs`, scanned or not).
 - `TRANSFERS`, in `Transfers.gs`: the aliases you transfer to and their
   category (`'x.y.z': 'Hogar'` for expensas). The alias is looked for in the
   whole payment email, ignoring case and accents. The file is git-ignored so
@@ -179,8 +187,8 @@ In `Categories.gs`:
   `.claspignore` keeps the template out of Apps Script (it would declare
   `TRANSFERS` twice). `clasp push` does upload `Transfers.gs`.
 
-The default patterns are generic: tune them with the emails that end up in
-`Gastos/Revisar`.
+The default patterns are generic: tune them with the emails `dryRun()` shows
+as `REVIEW`.
 
 #### Adding a category
 
@@ -209,7 +217,7 @@ too.
 
 After editing `Config.gs` or `Categories.gs` (and `clasp push`, if using clasp), run `dryRun()`
 from the editor. It looks at the last `DRY_RUN_HOURS` hours of inbox emails
-from every known sender, labeled or not, and logs what `run()` would do with
+that `run()` would look at, labeled or not, and logs what `run()` would do with
 each one, without labeling anything or touching the sheet:
 
 ```

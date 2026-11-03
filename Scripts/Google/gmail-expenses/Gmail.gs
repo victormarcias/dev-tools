@@ -6,11 +6,9 @@
 // end up in the same thread.
 
 function findMessageIds(source, since, includeLabeled) {
-  const terms = ['in:inbox', `from:"${source.from}"`];
+  const terms = ['in:inbox', source.anySender ? source.query : `from:"${source.from}"`];
   if (since) terms.push(`after:${since}`);
-  if (!includeLabeled) {
-    terms.push(`-label:${searchName(LABEL_PROCESSED)}`, `-label:${searchName(LABEL_REVIEW)}`);
-  }
+  if (!includeLabeled) terms.push(`-label:${searchName(LABEL)}`);
   const query = terms.join(' ');
 
   const ids = [];
@@ -23,23 +21,17 @@ function findMessageIds(source, since, includeLabeled) {
   return ids;
 }
 
-function markMessage(id, labelId) {
-  Gmail.Users.Messages.modify({ addLabelIds: [labelId] }, 'me', id);
+function markMessages(ids, id) {
+  // batchModify takes up to 1000 ids
+  for (let i = 0; i < ids.length; i += 1000) {
+    Gmail.Users.Messages.batchModify({ ids: ids.slice(i, i + 1000), addLabelIds: [id] }, 'me');
+  }
 }
 
-function getLabelIds() {
-  [LABEL_PROCESSED, LABEL_REVIEW].forEach((name) => {
-    // Parents first, so they show up nested
-    const parts = name.split('/');
-    parts.forEach((_, index) => {
-      const path = parts.slice(0, index + 1).join('/');
-      if (!GmailApp.getUserLabelByName(path)) GmailApp.createLabel(path);
-    });
-  });
-
-  const labels = Gmail.Users.Labels.list('me').labels;
-  const idOf = (name) => labels.find((label) => label.name === name).id;
-  return { processed: idOf(LABEL_PROCESSED), review: idOf(LABEL_REVIEW) };
+// The id of LABEL, created if missing
+function labelId() {
+  const label = (Gmail.Users.Labels.list('me').labels || []).find((l) => l.name === LABEL);
+  return (label || Gmail.Users.Labels.create({ name: LABEL }, 'me')).id;
 }
 
 // Gmail search writes label "A/B c" as a-b-c
