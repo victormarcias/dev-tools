@@ -1,2 +1,5 @@
 
 **/.DS_Store
+
+# Personal config for the Bash scripts (template: sync-config.example.txt)
+Scripts/Bash/sync-config.txt

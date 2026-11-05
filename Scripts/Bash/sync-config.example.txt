@@ -1,0 +1,13 @@
+# Config for sync_icloud_wd.sh and cleanup_wd.sh.
+# Copy this file as sync-config.txt (same folder, not committed) and fill it in.
+# Format: KEY=value, one per line. "~" at the start of a value means $HOME.
+
+# iCloud Drive folder (source)
+ICLOUD=~/Library/Mobile Documents/com~apple~CloudDocs
+
+# Mounted external disk (destination)
+VOLUME=/Volumes/My Disk
+
+# iCloud folders to sync: one FOLDER= line per folder
+FOLDER=Folder1
+FOLDER=Folder2
